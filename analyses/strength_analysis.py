@@ -47,10 +47,10 @@ class ExperimentBrowser(pg.TreeWidget):
         self.setDragDropMode(self.NoDragDrop)
         self.populate()
         self._last_expanded = None
-        
+
     def populate(self):
         self.items_by_pair_id = {}
-        
+
         self.session = db.Session()
         db_expts = db.list_experiments(session=self.session)
         db_expts.sort(key=lambda e: e.acq_timestamp)
@@ -73,7 +73,7 @@ class ExperimentBrowser(pg.TreeWidget):
                 pair_item.pair = pair
                 pair_item.expt = expt
                 self.items_by_pair_id[pair.id] = pair_item
-                
+
     def select_pair(self, pair_id):
         """Select a specific pair from the list
         """
@@ -108,7 +108,7 @@ class ResponseStrengthPlots(pg.dockarea.DockArea):
             dock = pg.dockarea.Dock(analyzer.title, widget=analyzer.widget)
             self.analyzer_docks.append(dock)
             self.addDock(dock, 'right')
-                
+
     def load_conn(self, pair):
         with pg.BusyCursor():
             for analyzer in self.analyzers:
@@ -233,7 +233,7 @@ class ResponseStrengthAnalyzer(object):
         self._selected_bg_ids = []
         self._clicked_fg_ids = []
         self._clicked_bg_ids = []
-    
+
     def fg_scatter_clicked(self, sp, points):
         """Point(s) were clicked; plot their source traces in a different color.
         """
@@ -262,7 +262,7 @@ class ResponseStrengthAnalyzer(object):
         self._base_recs = get_baseline_amps(self.session, self.pair, amps=self._amp_recs, clamp_mode=self.analysis[1])
         self.update_scatter_plots()
 
-    def update_scatter_plots(self): 
+    def update_scatter_plots(self):
         amp_recs = self._amp_recs
         base_recs = self._base_recs
         if amp_recs is None:
@@ -271,11 +271,11 @@ class ResponseStrengthAnalyzer(object):
         # select fg/bg data
         fg_data = amp_recs
         bg_data = base_recs[:len(fg_data)]
-        
+
         data_field = str(self.field_combo.currentText())
         if data_field != 'crosstalk':
             data_field = self.analysis[0] + '_' + data_field
-        
+
         if self.analysis[0] == 'pos':
             qc_field = 'ex_qc_pass' if self.analysis[1] == 'ic' else 'in_qc_pass'
         elif self.analysis[0] == 'neg':
@@ -342,12 +342,12 @@ class ResponseStrengthAnalyzer(object):
         self.bg_scatter.setData(bg_x, bg_y, data=bg_data, brush=bg_color)
 
         # show only qc-passed data in histogram
-        fg_x_qc = fg_x[fg_qc] 
+        fg_x_qc = fg_x[fg_qc]
         bg_x_qc = bg_x[bg_qc]
         if len(fg_x_qc) == 0 or len(bg_x_qc) == 0:
             return
-        
-        # plot histograms        
+
+        # plot histograms
         n_bins = max(5, int(len(fg_x_qc)**0.5))
         all_x = np.concatenate([fg_x_qc, bg_x_qc])
         bins = np.linspace(np.percentile(all_x, 2), np.percentile(all_x, 98), n_bins+1)
@@ -414,7 +414,7 @@ class ResponseStrengthAnalyzer(object):
             q = q.add_column(db.Baseline.start_time)
             traces = self.selected_bg_traces
             plot = self.bg_trace_plot
-        
+
         q = q.join(db.SyncRec).add_column(db.SyncRec.ext_id.label('sync_rec_ext_id'))
         recs = q.all()
         return recs
@@ -438,11 +438,11 @@ class ResponseStrengthAnalyzer(object):
             for i in trace_list[:]:
                 plot.removeItem(i)
                 trace_list.remove(i)
-                
+
             if pen is None:
                 alpha = np.clip(1000 / len(recs), 30, 255)
                 pen = (255, 255, 255, alpha)
-                
+
             traces = []
             spike_times = []
             spike_values = []
@@ -452,7 +452,7 @@ class ResponseStrengthAnalyzer(object):
                     continue
 
                 s = {'fg': 'pulse_response', 'bg': 'baseline'}[source]
-                result = analyze_response_strength(rec, source=s, lpf=self.lpf_check.isChecked(), 
+                result = analyze_response_strength(rec, source=s, lpf=self.lpf_check.isChecked(),
                                                    remove_artifacts=self.ar_check.isChecked(), bsub=self.bsub_check.isChecked())
 
                 if self.deconv_check.isChecked():
@@ -463,7 +463,7 @@ class ResponseStrengthAnalyzer(object):
                         trace = trace - np.median(trace.time_slice(0, 9e-3).data)
                     if self.lpf_check.isChecked():
                         trace = filter.bessel_filter(trace, 500)
-                
+
                 spike_values.append(trace.value_at([result['spike_time']])[0])
                 if self.align_check.isChecked():
                     trace.t0 = -result['spike_time']
@@ -531,13 +531,13 @@ def query_all_pairs(classifier=None):
 
 
     query = ("""
-    select 
+    select
     {columns}
     from connection_strength
     {joins}
     order by acq_timestamp
     """).format(
-        columns=", ".join(columns), 
+        columns=", ".join(columns),
         joins=" ".join(joins),
     )
 
@@ -556,13 +556,13 @@ def query_all_pairs(classifier=None):
     return recs
 
 
-pair_classifier = None
+# pair_classifier = None
 def get_pair_classifier(**kwds):
     global pair_classifier
     if pair_classifier is None:
         pair_classifier = PairClassifier(**kwds)
     return pair_classifier
-    
+
 
 def datetime_to_timestamp(d):
     return time.mktime(d.timetuple()) + d.microsecond * 1e-6
@@ -689,7 +689,7 @@ class PairClassifier(object):
         self.scaler = scaler
 
         # split into training and test sets
-        # select training set from connected and non-connected separately to ensure 
+        # select training set from connected and non-connected separately to ensure
         # we get enough connected examples in the training set
         train_mask = np.zeros(len(y), dtype='bool')
         syn = np.argwhere(y)
@@ -724,7 +724,7 @@ class PairClassifier(object):
             pred = clf.predict(test_x)
             def pr(name, pred, test_y):
                 print("%s:  %d/%d  %0.2f%%" % (name, (pred & test_y).sum(), test_y.sum(), 100 * (pred & test_y).sum() / test_y.sum()))
-                
+
             pr(" True positive", pred, test_y)
             pr("False positive", pred, ~test_y)
             pr(" True negative", ~pred, ~test_y)
@@ -803,7 +803,7 @@ class PairScatterPlot(pg.QtCore.QObject):
         # Load all records into scatter plot widget
         spw = pg.ScatterPlotWidget()
         spw.style['symbolPen'] = None
-        
+
         spw.resize(1000, 800)
         spw.show()
 
@@ -840,7 +840,7 @@ class PairScatterPlot(pg.QtCore.QObject):
                 fields.append((f, {'units': 's'}))
             else:
                 fields.append((f, {}))
-                
+
         spw.setFields(fields)
         spw.setData(recs)
 
@@ -873,7 +873,7 @@ class PairScatterPlot(pg.QtCore.QObject):
 
 
 class PairView(pg.QtCore.QObject):
-    """For browsing and analyzing pairs. 
+    """For browsing and analyzing pairs.
 
     Contains an ExperimentBrowser and a number of analyzers showing response properties of a selected pair
     """
@@ -887,14 +887,14 @@ class PairView(pg.QtCore.QObject):
         win.setOrientation(pg.QtCore.Qt.Horizontal)
         win.resize(1000, 800)
         win.show()
-        
+
         b = ExperimentBrowser()
         win.addWidget(b)
-        
+
         rs_plots = ResponseStrengthPlots(self.session)
         win.addWidget(rs_plots)
 
-        b.itemSelectionChanged.connect(self._selected)            
+        b.itemSelectionChanged.connect(self._selected)
         b.doubleClicked.connect(self._dbl_clicked)
 
         self.win = win
@@ -945,7 +945,7 @@ class PairView(pg.QtCore.QObject):
             print(cls.predict([f]))
         else:
             print("ID: %s" % sec)
-        
+
 
 
 
@@ -971,7 +971,7 @@ def str_analysis_result_table(results, recs):
         ('data', object),
         ('rec_start_time', float),
     ]
-    
+
     table = np.empty(len(recs), dtype=dtype)
     for i,rec in enumerate(recs):
         for key in ['ex_qc_pass', 'in_qc_pass', 'clamp_mode', 'data']:
@@ -992,7 +992,7 @@ class RecordWrapper(object):
         self._rec = rec
     def __getattr__(self, attr):
         return getattr(self._rec, attr)
-        
+
 
 def simulate_response(fg_recs, bg_results, amp, rtime, seed=None):
     if seed is not None:
@@ -1048,7 +1048,7 @@ def simulate_connection(fg_recs, bg_results, classifier, amp, rtime, n_trials=8)
     result['confidence'] = pred['confidence']
     # print("\nrise time:", rtime, " amplitude:", amp)
     # print(pred)
-        
+
     return result
 
 
@@ -1092,10 +1092,10 @@ if __name__ == '__main__':
                 continue
             if post_cell.cre_type not in constants.EXCITATORY_CRE_TYPES and post_cell.morphology.pyramidal is not True:
                 continue
-            
+
             print("{:s} {:0.3f} {:d} {:d} {:15s} {:20s}  (L{:<3s} {:7s} {:6s}) (L{:<3s} {:7s} {:6s})".format(
                 pair.experiment.rig_name, pair.experiment.acq_timestamp, pre_cell.ext_id, post_cell.ext_id, pair.experiment.internal, pair.experiment.acsf,
-                pre_cell.target_layer, pre_cell.cre_type, {True: 'pyr', None: '?', False: 'nonpyr'}[pre_cell.morphology.pyramidal], 
+                pre_cell.target_layer, pre_cell.cre_type, {True: 'pyr', None: '?', False: 'nonpyr'}[pre_cell.morphology.pyramidal],
                 post_cell.target_layer, post_cell.cre_type, {True: 'pyr', None: '?', False: 'nonpyr'}[post_cell.morphology.pyramidal]
             ))
 

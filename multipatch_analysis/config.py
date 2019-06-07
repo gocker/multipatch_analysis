@@ -29,7 +29,7 @@ synphys_db_host: "postgresql://readonly:readonly@10.128.36.109"
 synphys_db: "synphys"
 # optional DB access with write privileges
 synphys_db_host_rw: null
-synphys_db_readonly_user = "readonly"
+synphys_db_readonly_user: "readonly"
 
 # path to synphys network storage
 synphys_data: "N:\\"
@@ -63,10 +63,10 @@ backup_paths:
         source: "C:\\"
         dest: "E:\\C_backup"
         archive_deleted: true
-        
+
 """
 
-configfile = os.path.join(os.path.dirname(__file__), '..', 'config.yml')
+configfile = os.path.join(os.path.dirname(__file__), 'config.yml')
 if not os.path.isfile(configfile):
     open(configfile, 'wb').write(template)
 
@@ -74,6 +74,3 @@ config = yaml.load(open(configfile, 'rb'))
 
 for k,v in config.items():
     locals()[k] = v
-
-
-
