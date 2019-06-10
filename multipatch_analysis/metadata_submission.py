@@ -187,7 +187,7 @@ class ExperimentMetadataSubmission(object):
             dod = self.spec_info['date_of_birth'].date() + timedelta(self.spec_info['age'])
             days_since_death = (site_date.date() - dod).days
             if days_since_death > 0:
-                warnings.append("Specimen was dissected before today, likely need to update LabTracks info in LIMS")
+                warnings.append("Specimen was dissected before today, likely need to update LabTracks info in LIMS(Date of experiment: %s, Date of death: %s, you decide)" % (site_date.date(), dod))
             if days_since_death < 0:
                 warnings.append("Specimen is from the future, likely need to update LabTracks info in LIMS")
 
@@ -307,6 +307,16 @@ class ExperimentMetadataSubmission(object):
         if acq_plate_well is not None and acq_plate_well.strip() != hist_well:
             errors.append('LIMS histology well name "%s" does not match ACQ4 plate_well_ID "%s"' 
                     % (hist_well, acq_plate_well))
+                    
+        # make sure genotype matches specimen name
+        if self.spec_info['organism'] == 'mouse':
+            if self.spec_info['genotype'] is None:
+                errors.append('Specimen %s has no genotype' % spec_name)
+            else:
+                gt = genotypes.Genotype(self.spec_info['genotype'])
+                for part in gt.driver_lines + gt.reporter_lines:
+                    if part not in spec_name:
+                        errors.append('Specimen name %s does not contain genotype part %s' % (spec_name, part))
 
     def summary(self):
         summ = OrderedDict()
@@ -325,11 +335,12 @@ class ExperimentMetadataSubmission(object):
             
         # Write LIMS info to top-level and slice directory handles.
         # This is just for convenience when browsing the raw data.
-        slice_info = self.spec_info.copy()
-        donor_keys = ['organism', 'age', 'date_of_birth', 'genotype', 'weight', 'sex']
-        donor_info = {k:slice_info.pop(k) for k in donor_keys}
-        expt_dh.setInfo(LIMS_donor_info=donor_info)
-        slice_dh.setInfo(LIMS_specimen_info=slice_info)
+        if self.spec_info is not None:
+            slice_info = self.spec_info.copy()
+            donor_keys = ['organism', 'age', 'date_of_birth', 'genotype', 'weight', 'sex']
+            donor_info = {k:slice_info.pop(k) for k in donor_keys}
+            expt_dh.setInfo(LIMS_donor_info=donor_info)
+            slice_dh.setInfo(LIMS_specimen_info=slice_info)
             
         # Write category labels for each image
         for file_info in self.files:

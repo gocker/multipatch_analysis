@@ -9,7 +9,7 @@ from collections import OrderedDict
 import numpy as np
 from .. import config, lims
 from ..experiment import Experiment
-from ..database import database
+from .. import database
 from ..genotypes import Genotype
 from .actions import ExperimentActions
 from ..yaml_local import yaml
@@ -58,6 +58,7 @@ class Dashboard(QtGui.QWidget):
             ('lims_slice_name', object),
             ('item', object),
             ('error', object),
+            ('db_errors', object),
         ]
 
         # maps field name : index (column number)
@@ -268,7 +269,8 @@ class Dashboard(QtGui.QWidget):
             ('drawing tool', 'lims_drawing_tool_url'),
             ('cluster ID', 'cluster_id'),
             ('slice fixed', 'slice_fixed'),
-            ('LIMS status', 'lims_message')
+            ('LIMS status', 'lims_message'), 
+            ('Cell Map', 'map_message')
         ]
         for name,attr in print_fields:
             try:
@@ -280,8 +282,14 @@ class Dashboard(QtGui.QWidget):
                 break
         err = rec['error']
         if err is not None:
-            msg.append("Error checking experiment:")
+            msg.append("--------------------------------\nError checking experiment:")
             msg.extend([line.rstrip() for line in traceback.format_exception(*err)])
+
+        db_errors = rec['db_errors']
+        if isinstance(db_errors, dict) and len(db_errors) > 0:
+            msg.append("--------------------------------\nErrors in DB pipeline:")
+            for module, err in db_errors.items():
+                msg.append("--- %s ---\n%s\n" % (module, err))
 
         msg = '\n'.join(msg)
         print(msg)
@@ -604,6 +612,7 @@ class ExperimentMetadata(Experiment):
             rec['NAS'] = False if self.nas_path is None else (True if os.path.exists(self.nas_path) else "MISSING")
 
             self.lims_message = None
+            self.map_message = None
             org = self.organism
             if org is None:
                 description = ("no LIMS spec info", fail_color)
@@ -653,16 +662,27 @@ class ExperimentMetadata(Experiment):
                 rec['connections'] = connections
                 if rec['data'] is True:
                     rec['site.mosaic'] = self.mosaic_file is not None
-                    rec['DB'] = self.in_database
+                    has_run, expt_success, all_success, errors = self.db_status
+                    if not has_run:
+                        rec['DB'] = ("MISSING", (255, 255, 100))
+                    elif not expt_success:
+                        rec['DB'] = ("ERROR", fail_color)
+                    elif not all_success:
+                        rec['DB'] = ("ERROR", (255, 255, 100))
+                    else:
+                        rec['DB'] = True
+                    rec['db_errors'] = errors
 
                     cell_cluster = self.lims_cell_cluster_id
-                    if cell_cluster is not None:
-                        in_lims = cell_cluster is not None
-                        self.lims_message = self.lims_submissions
-                    else:
+                    lims_ignore_path = os.path.join(self.archive_path, '.mpe_ignore')
+                    if os.path.isdir(lims_ignore_path):
                         lims_ignore_file = os.path.join(self.archive_path, '.mpe_ignore')
                         in_lims = "FAILED"
-                        self.lims_message = open(lims_ignore_file, 'r').read() 
+                        self.lims_message = open(lims_ignore_file, 'r').read()
+                    else:
+                        in_lims = cell_cluster is not None
+                        self.lims_message = self.lims_submissions
+ 
                     rec['LIMS'] = in_lims
 
                     if in_lims is True and slice_fixed is True and image_20x is not None:
@@ -675,7 +695,18 @@ class ExperimentMetadata(Experiment):
                                 image_63x = self.biocytin_63x_files
                                 rec['63x'] = image_63x is not None
                                 cell_info = lims.cluster_cells(cell_cluster)
-                                mapped = len(cell_info) > 0 and all([ci['x_coord'] is not None  for ci in cell_info])
+                                x_coord = all([ci['x_coord'] is not None for ci in cell_info])
+                                x_coord_values = all([ci['x_coord'] != 0 for ci in cell_info])
+                                y_coord = all([ci['y_coord'] is not None  for ci in cell_info])
+                                y_coord_values = all([ci['y_coord'] != 0 for ci in cell_info])
+                                polygon = all([ci['polygon_id'] is not None  for ci in cell_info])
+                                mapped = len(cell_info) > 0 and x_coord is True and y_coord is True
+                                if mapped is True and x_coord_values is False and y_coord_values is False:
+                                    mapped = ('Incomplete', (255, 255, 102))
+                                    self.map_message = 'Cell positions contain 0-values, please re-map'
+                                if mapped is True and polygon is False:
+                                    mapped = ('Incomplete', [c * 0.5 + 128 for c in pass_color])
+                                    self.map_message = 'Cell positions submitted to LIMS but polygons have not been drawn yet'
                                 rec['cell map'] = mapped
                                 
             else:
@@ -803,11 +834,14 @@ class ExperimentMetadata(Experiment):
         return self._rig_name
 
     @property
-    def in_database(self):
-        session = database.Session()
-        expts = session.query(database.Experiment.id).filter(database.Experiment.acq_timestamp==self.timestamp).all()
-        session.close()
-        return len(expts) == 1
+    def db_status(self):
+        jobs = database.query(database.Pipeline).filter(database.Pipeline.job_id==self.timestamp).all()
+        has_run = len(jobs) > 0
+        success = {j.module_name:j.success for j in jobs}
+        errors = {j.module_name:j.error for j in jobs}
+        expt_success = success.get('experiment', False)
+        all_success = all(success.values())
+        return has_run, expt_success, all_success, errors
 
     @property
     def lims_submissions(self):

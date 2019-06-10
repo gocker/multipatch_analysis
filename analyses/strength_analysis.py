@@ -28,17 +28,15 @@ from neuroanalysis.event_detection import exp_deconvolve
 from neuroanalysis.baseline import float_mode
 from neuroanalysis.fitting import Psp
 
-from multipatch_analysis.database import database as db
+from multipatch_analysis import database as db
 from multipatch_analysis.ui.multipatch_nwb_viewer import MultipatchNwbViewer
-from multipatch_analysis.pulse_response_strength import (
-    PulseResponseStrength, BaselineResponseStrength, response_query,
-    baseline_query, analyze_response_strength, pulse_response_strength_tables,
-)
-from multipatch_analysis.connection_strength import ConnectionStrength, get_amps, get_baseline_amps
-import multipatch_analysis.morphology  # just to initialize ORM
+from multipatch_analysis.ui.experiment_browser import ExperimentBrowser
+from multipatch_analysis.pulse_response_strength import response_query, baseline_query, analyze_response_strength
+from multipatch_analysis.connection_strength import get_amps, get_baseline_amps
 from multipatch_analysis import constants
 
 
+<<<<<<< HEAD
 class ExperimentBrowser(pg.TreeWidget):
     def __init__(self):
         pg.TreeWidget.__init__(self)
@@ -92,6 +90,10 @@ class ExperimentBrowser(pg.TreeWidget):
 
 
 
+=======
+ui_file = os.path.join(os.path.dirname(__file__), 'strength_analysis_ctrl.ui')
+StrengthAnalysisCtrl, _ = pg.Qt.loadUiType(ui_file)
+>>>>>>> 27e233553978dfd88684d49a4dcb2c88d6b25a29
 
 
 class ResponseStrengthPlots(pg.dockarea.DockArea):
@@ -169,52 +171,69 @@ class ResponseStrengthAnalyzer(object):
         self.fg_trace_plot.setXRange(0, 20e-3)
 
         self.ctrl = QtGui.QWidget()
+        self.ui = StrengthAnalysisCtrl()
+        self.ui.setupUi(self.ctrl)        
         self.layout.addWidget(self.ctrl, 1, 0)
-        self.ctrl_layout = QtGui.QGridLayout()
-        self.ctrl.setLayout(self.ctrl_layout)
-        self.ctrl_layout.setContentsMargins(0, 0, 0, 0)
+        # self.ctrl_layout = QtGui.QGridLayout()
+        # self.ctrl.setLayout(self.ctrl_layout)
+        # self.ctrl_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.field_combo = QtGui.QComboBox()
+        # self.h
+        # self.ui.field_combo = QtGui.QComboBox()
         for field in ['dec_amp', 'amp', 'dec_latency', 'crosstalk']:
-            self.field_combo.addItem(field)
-        self.ctrl_layout.addWidget(self.field_combo, 0, 0)
-        self.field_combo.currentIndexChanged.connect(self.update_scatter_plots)
+            self.ui.field_combo.addItem(field)
+        # self.ctrl_layout.addWidget(self.ui.field_combo, 0, 0)
+        self.ui.field_combo.currentIndexChanged.connect(self.update_scatter_plots)
+        
+        # self.ui.qc_check = QtGui.QCheckBox('QC filter')
+        # self.ui.qc_check.setChecked(True)
+        # self.ctrl_layout.addWidget(self.ui.qc_check, 0, 1)
+        self.ui.qc_check.toggled.connect(self.replot_all)
+        
+        # self.ui.bg_radio = QtGui.QRadioButton('bg noise')
+        # self.ui.bg_radio.setChecked(True)
+        # self.ctrl_layout.addWidget(self.ui.bg_radio, 0, 2)
+        self.ui.bg_radio.toggled.connect(self.replot_all)
+        
+        # self.pre_radio = QtGui.QRadioButton('presyn')
+        # self.pre_radio.setChecked(False)
+        # self.ctrl_layout.addWidget(self.pre_radio, 0, 3)        
 
-        self.deconv_check = QtGui.QCheckBox('deconvolve')
-        self.deconv_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.deconv_check, 1, 0)
-        self.deconv_check.toggled.connect(self.replot_all)
+        # self.ui.deconv_check = QtGui.QCheckBox('deconvolve')
+        # self.ui.deconv_check.setChecked(False)
+        # self.ctrl_layout.addWidget(self.ui.deconv_check, 1, 0)
+        self.ui.deconv_check.toggled.connect(self.replot_all)
 
-        self.bsub_check = QtGui.QCheckBox('bsub')
-        self.bsub_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.bsub_check, 1, 1)
-        self.bsub_check.toggled.connect(self.replot_all)
+        # self.ui.bsub_check = QtGui.QCheckBox('bsub')
+        # self.ui.bsub_check.setChecked(True)
+        # self.ctrl_layout.addWidget(self.ui.bsub_check, 1, 1)
+        self.ui.bsub_check.toggled.connect(self.replot_all)
 
-        self.lpf_check = QtGui.QCheckBox('lpf')
-        self.lpf_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.lpf_check, 1, 2)
-        self.lpf_check.toggled.connect(self.replot_all)
+        # self.ui.lpf_check = QtGui.QCheckBox('lpf')
+        # self.ui.lpf_check.setChecked(False)
+        # self.ctrl_layout.addWidget(self.ui.lpf_check, 1, 2)
+        self.ui.lpf_check.toggled.connect(self.replot_all)
 
-        self.ar_check = QtGui.QCheckBox('crosstalk')
-        self.ar_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.ar_check, 1, 3)
-        self.ar_check.toggled.connect(self.replot_all)
+        # self.ui.ar_check = QtGui.QCheckBox('crosstalk')
+        # self.ui.ar_check.setChecked(False)
+        # self.ctrl_layout.addWidget(self.ui.ar_check, 1, 3)
+        self.ui.ar_check.toggled.connect(self.replot_all)
 
-        self.align_check = QtGui.QCheckBox('align')
-        self.align_check.setChecked(True)
-        self.ctrl_layout.addWidget(self.align_check, 1, 4)
-        self.align_check.toggled.connect(self.replot_all)
+        # self.ui.align_check = QtGui.QCheckBox('align')
+        # self.ui.align_check.setChecked(True)
+        # self.ctrl_layout.addWidget(self.ui.align_check, 1, 4)
+        self.ui.align_check.toggled.connect(self.replot_all)
 
-        self.pulse_ctrl = QtGui.QWidget()
-        self.ctrl_layout.addWidget(self.pulse_ctrl, 2, 0, 1, 5)
+        # self.pulse_ctrl = QtGui.QWidget()
+        # self.ctrl_layout.addWidget(self.pulse_ctrl, 2, 0, 1, 5)
         self.pulse_layout = QtGui.QHBoxLayout()
-        self.pulse_ctrl.setLayout(self.pulse_layout)
+        self.ui.pulse_ctrl.setLayout(self.pulse_layout)
         self.pulse_layout.setContentsMargins(0, 0, 0, 0)
         self.pulse_layout.setSpacing(0)
 
-        self.color_by_pulse_check = QtGui.QCheckBox('color pulse n')
-        self.pulse_layout.addWidget(self.color_by_pulse_check)
-        self.color_by_pulse_check.toggled.connect(self.update_scatter_plots)
+        # self.color_by_pulse_check = QtGui.QCheckBox('color pulse n')
+        # self.pulse_layout.addWidget(self.color_by_pulse_check)
+        # self.color_by_pulse_check.toggled.connect(self.update_scatter_plots)
 
         self.pulse_checks = []
         for i in range(12):
@@ -239,10 +258,10 @@ class ResponseStrengthAnalyzer(object):
         """
         ids = [p.data()['id'] for p in points]
         self._clicked_fg_ids = ids
-        self.plot_prd_ids(ids, 'fg', trace_list=self.clicked_fg_traces, pen='y')
+        self.plot_prd_ids(ids, 'fg', trace_list=self.clicked_fg_traces, pen='y', qc_filter=False)
 
         global selected_response
-        selected_response = self.session.query(PulseResponseStrength).filter(PulseResponseStrength.id==ids[0]).first()
+        selected_response = self.session.query(db.PulseResponseStrength).filter(db.PulseResponseStrength.id==ids[0]).first()
         prs_qc()
 
     def bg_scatter_clicked(self, sp, points):
@@ -250,10 +269,10 @@ class ResponseStrengthAnalyzer(object):
         """
         ids = [p.data()['id'] for p in points]
         self._clicked_bg_ids = ids
-        self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y')
+        self.plot_prd_ids(ids, 'bg', trace_list=self.clicked_bg_traces, pen='y', qc_filter=False)
 
         global selected_response
-        selected_response = self.session.query(BaselineResponseStrength).filter(BaselineResponseStrength.id==ids[0]).first()
+        selected_response = self.session.query(db.BaselineResponseStrength).filter(db.BaselineResponseStrength.id==ids[0]).first()
         prs_qc()
 
     def load_conn(self, pair):
@@ -271,8 +290,13 @@ class ResponseStrengthAnalyzer(object):
         # select fg/bg data
         fg_data = amp_recs
         bg_data = base_recs[:len(fg_data)]
+<<<<<<< HEAD
 
         data_field = str(self.field_combo.currentText())
+=======
+        
+        data_field = str(self.ui.field_combo.currentText())
+>>>>>>> 27e233553978dfd88684d49a4dcb2c88d6b25a29
         if data_field != 'crosstalk':
             data_field = self.analysis[0] + '_' + data_field
 
@@ -282,8 +306,8 @@ class ResponseStrengthAnalyzer(object):
             qc_field = 'in_qc_pass' if self.analysis[1] == 'ic' else 'ex_qc_pass'
         fg_x = fg_data[data_field]
         bg_x = bg_data[data_field]
-        fg_qc = fg_data[qc_field].copy()
-        bg_qc = bg_data[qc_field].copy()
+        fg_qc = fg_data[qc_field] == True
+        bg_qc = bg_data[qc_field] == True
 
         # record data for later use
         self.fg_x = fg_x
@@ -313,7 +337,7 @@ class ResponseStrengthAnalyzer(object):
                 continue
 
             # Otherwise, we can color by pulse number if requested
-            if self.color_by_pulse_check.isChecked():
+            if self.ui.color_by_pulse_check.isChecked():
                 g = pulse_n * 255/7.
                 b = 255 - g
                 if pulse_n > 7:
@@ -402,15 +426,15 @@ class ResponseStrengthAnalyzer(object):
         ids = list(map(int, ids))
         if source == 'fg':
             q = response_query(self.session)
-            q = q.join(PulseResponseStrength)
-            q = q.filter(PulseResponseStrength.id.in_(ids))
+            q = q.join(db.PulseResponseStrength)
+            q = q.filter(db.PulseResponseStrength.id.in_(ids))
             q = q.add_column(db.PulseResponse.start_time)
             traces = self.selected_fg_traces
             plot = self.fg_trace_plot
         else:
             q = baseline_query(self.session)
-            q = q.join(BaselineResponseStrength)
-            q = q.filter(BaselineResponseStrength.id.in_(ids))
+            q = q.join(db.BaselineResponseStrength)
+            q = q.filter(db.BaselineResponseStrength.id.in_(ids))
             q = q.add_column(db.Baseline.start_time)
             traces = self.selected_bg_traces
             plot = self.bg_trace_plot
@@ -419,10 +443,13 @@ class ResponseStrengthAnalyzer(object):
         recs = q.all()
         return recs
 
-    def plot_prd_ids(self, ids, source, pen=None, trace_list=None, avg=False):
+    def plot_prd_ids(self, ids, source, pen=None, trace_list=None, avg=False, qc_filter=None):
         """Plot raw or decolvolved PulseResponse data, given IDs of records in
-        a PulseResponseStrength table.
+        a db.PulseResponseStrength table.
         """
+        if qc_filter is None:
+            qc_filter = self.ui.qc_check.isChecked()
+        
         with pg.BusyCursor():
             recs = self.get_pulse_recs(ids, source)
             if len(recs) == 0:
@@ -442,16 +469,29 @@ class ResponseStrengthAnalyzer(object):
             if pen is None:
                 alpha = np.clip(1000 / len(recs), 30, 255)
                 pen = (255, 255, 255, alpha)
+<<<<<<< HEAD
 
+=======
+                
+            pen = pg.mkPen(pen)
+            # qc-failed traces are tinted red
+            fail_color = pen.color()
+            fail_color.setBlue(fail_color.blue() // 2)
+            fail_color.setGreen(fail_color.green() // 2)
+            qc_fail_pen = pg.mkPen(fail_color)
+                
+>>>>>>> 27e233553978dfd88684d49a4dcb2c88d6b25a29
             traces = []
             spike_times = []
             spike_values = []
             for rec in recs:
                 # Filter by QC unless we selected just a single record
-                if len(recs) > 0 and getattr(rec, self.qc_field) is False:
+                qc_pass = getattr(rec, self.qc_field) is True
+                if qc_filter is True and not qc_pass:
                     continue
 
                 s = {'fg': 'pulse_response', 'bg': 'baseline'}[source]
+<<<<<<< HEAD
                 result = analyze_response_strength(rec, source=s, lpf=self.lpf_check.isChecked(),
                                                    remove_artifacts=self.ar_check.isChecked(), bsub=self.bsub_check.isChecked())
 
@@ -464,17 +504,28 @@ class ResponseStrengthAnalyzer(object):
                     if self.lpf_check.isChecked():
                         trace = filter.bessel_filter(trace, 500)
 
+=======
+                filter_opts = dict(
+                    deconvolve=self.ui.deconv_check.isChecked(),
+                    lpf=self.ui.lpf_check.isChecked(),
+                    remove_artifacts=self.ui.ar_check.isChecked(),
+                    bsub=self.ui.bsub_check.isChecked(),
+                )
+                result = analyze_response_strength(rec, source=s, **filter_opts)
+                trace = result['dec_trace']
+                
+>>>>>>> 27e233553978dfd88684d49a4dcb2c88d6b25a29
                 spike_values.append(trace.value_at([result['spike_time']])[0])
-                if self.align_check.isChecked():
+                if self.ui.align_check.isChecked():
                     trace.t0 = -result['spike_time']
                     spike_times.append(0)
                 else:
                     spike_times.append(result['spike_time'])
 
                 traces.append(trace)
-                trace_list.append(plot.plot(trace.time_values, trace.data, pen=pen))
+                trace_list.append(plot.plot(trace.time_values, trace.data, pen=(pen if qc_pass else qc_fail_pen)))
 
-            if avg:
+            if avg and len(traces) > 0:
                 mean = TraceList(traces).mean()
                 trace_list.append(plot.plot(mean.time_values, mean.data, pen='g'))
                 trace_list[-1].setZValue(10)
@@ -564,17 +615,13 @@ def get_pair_classifier(**kwds):
     return pair_classifier
 
 
-def datetime_to_timestamp(d):
-    return time.mktime(d.timetuple()) + d.microsecond * 1e-6
-
-
 def prs_qc():
     """Convenience function for debugging QC: returns (recording, window) arguments
     used for pulse response QC
     """
     global selected_response
     sr = selected_response
-    if isinstance(sr, PulseResponseStrength):
+    if isinstance(sr, db.PulseResponseStrength):
         resp = sr.pulse_response
     else:
         resp = sr.baseline
@@ -654,6 +701,8 @@ class PairClassifier(object):
 
         # Random seed used when shuffling training/test inputs
         self.seed = seed
+        
+        self.scaler = None
 
     def fit(self, recs):
         ids = recs['id']
@@ -757,9 +806,12 @@ class PairClassifier(object):
         result = np.empty(len(features), dtype=[('prediction', float), ('confidence', float)])
         result[:] = np.nan
 
+        if self.scaler is None:
+            return result
+
         # mask out inf/nan records
         mask = np.all(np.isfinite(features), axis=1)
-
+           
         # scale masked records
         norm_features = self.scaler.transform(features[mask])
 
@@ -927,15 +979,10 @@ class PairView(pg.QtCore.QObject):
             self.rs_plots.load_conn(pair)
 
         sec = sel.expt.acq_timestamp
-        src = sel.expt.source_experiment
+
         print("======================================")
-        if src.entry is not None:
-            src.entry.print_tree()
-        else:
-            print(open(src.source_id[0], 'rb').read())
-        print("------------------------------")
-        print("Original path:", src)
-        print("Server path:", sel.expt.original_path)
+        print("Original path:", sel.expt.original_path)
+        print("Server path:", sel.expt.storage_path)
         if hasattr(sel, 'pair'):
             print("ID: %.3f  %d->%d" % (sec, pair.pre_cell.ext_id, pair.post_cell.ext_id))
             conn = pair.connection_strength
@@ -944,8 +991,13 @@ class PairView(pg.QtCore.QObject):
             print(f)
             print(cls.predict([f]))
         else:
+<<<<<<< HEAD
             print("ID: %s" % sec)
 
+=======
+            print("ID: %.3f" % sec)
+        
+>>>>>>> 27e233553978dfd88684d49a4dcb2c88d6b25a29
 
 
 
@@ -1057,22 +1109,27 @@ if __name__ == '__main__':
     import user
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--seed', type=int, default=0, help="Seed used to randomize classifier inputs")
+    parser.add_argument('--seed', type=int, default=0, help="Seed used to randomize classifier inputs")    
+    parser.add_argument('--pairview', default=False, action='store_true', help="Only display experiment browser ui")
     args = parser.parse_args(sys.argv[1:])
 
     pg.dbg()
 
+    # add window for analyzing selected pairs
+    pair_view = PairView()
+
+    if args.pairview:
+        if sys.flags.interactive == 0:
+            pg.mkQApp().exec_()
+        sys.exit(0)
+    
     # Load records on all pairs and train a classifier to predict connections
     classifier = get_pair_classifier(seed=None if args.seed < 0 else args.seed)
     recs = query_all_pairs(classifier)
 
     # show all records in scatter plot
     spw = PairScatterPlot(recs)
-
-    # add another window for analyzing selected pairs
-    pair_view = PairView()
     spw.pair_clicked.connect(pair_view.select_pair)
-
 
     # Print a little report about synapses that may have been misclassified
     session = db.Session()

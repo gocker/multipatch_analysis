@@ -16,7 +16,7 @@ import pyqtgraph as pg
 import pyqtgraph.configfile
 
 from . import lims
-from .constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES, LAYERS
+from .constants import ALL_CRE_TYPES, ALL_LABELS, FLUOROPHORES, LAYERS, INJECTIONS
 from .cell import Cell
 from .electrode import Electrode
 from .data import MultiPatchExperiment
@@ -24,13 +24,14 @@ from .pipette_metadata import PipetteMetadata
 from .genotypes import Genotype
 from .synphys_cache import SynPhysCache
 from . import yaml_local, config
+from .util import timestamp_to_datetime
 
 
 class Experiment(object):
     def __init__(self, site_path=None, entry=None, yml_file=None, verify=True):
         self.entry = entry
         self.source_id = (None, None)
-        self.electrodes = None
+        self._electrodes = None
         self._cells = None
         self._connections = None
         self._gaps = None
@@ -41,7 +42,7 @@ class Experiment(object):
         self._slice_info = None
         self._expt_info = None
         self._lims_record = None
-        self._site_path = None
+        self._site_path = site_path
         self._probed = None
         self._sweep_summary = None
         self._mosaic_file = None
@@ -53,22 +54,26 @@ class Experiment(object):
         self._labels = None
         self._target_layers = None
         self._rig_name = None
+        self._loaded = False
+        self._yml_file = yml_file
         
         if site_path is not None:
-            yml_file = os.path.join(site_path, 'pipettes.yml')
-        
-        if entry is not None:
-            self._load_old_format(entry)
+            self._yml_file = os.path.join(site_path, 'pipettes.yml')
         elif yml_file is not None:
-            self._load_yml(yml_file)
-            
+            self._site_path = os.path.dirname(yml_file)
 
         if verify:
             self.verify()
 
+    def _load(self):
+        if not self._loaded:
+            self._load_yml(self._yml_file)
+            self._loaded = True
+
     def verify(self):
         """Perform some basic checks to ensure this experiment was acquired correctly.
         """
+        self._load()
         # make sure all cells have information for all labels
         for cell in self.cells.values():
             for label in self.labels:
@@ -89,12 +94,12 @@ class Experiment(object):
             self.nwb_file
 
             # read cell positions from mosaic files
-            try:
-                self.load_cell_positions()
-            except Exception as exc:
-                # sys.excepthook(*sys.exc_info())
-                print("Warning: Could not load cell positions for %s (%s)" % (self, str(exc)))
-
+            if self.mosaic_file is not None:
+                try:
+                    self.load_cell_positions()
+                except Exception as exc:
+                    # sys.excepthook(*sys.exc_info())
+                    print("Warning: Could not load cell positions for %s (%s)" % (self, str(exc)))
 
     @staticmethod
     def _id_from_entry(entry):
@@ -107,7 +112,7 @@ class Experiment(object):
         This returns the site timestamp formatted to 2 decimal places, which is
         very likely to be unique for any site.
         """
-        return '%0.2f' % (self.site_info['__timestamp__'])
+        return '%0.3f' % (self.site_info['__timestamp__'])
     
     @property
     def timestamp(self):
@@ -121,6 +126,27 @@ class Experiment(object):
     @property
     def date(self):
         return self.datetime.date()
+
+    @property
+    def last_modification_time(self):
+        """The timestamp of the most recently modified file in this experiment.
+        """
+        files = [
+            self.path,
+            self.pipette_file,
+            self.nwb_file,
+            self.mosaic_file,
+            os.path.join(self.path, '.index'),
+            os.path.join(self.slice_path, '.index'),
+            os.path.join(self.expt_path, '.index'),
+        ]
+        mtime = 0
+        for file in files:
+            if file is None or not os.path.exists(file):
+                continue
+            mtime = max(mtime, os.stat(file).st_mtime)
+        
+        return timestamp_to_datetime(mtime)
 
     @property
     def connections(self):
@@ -140,6 +166,8 @@ class Experiment(object):
     def connection_calls(self):
         """Manually curated list of synaptic connections seen in this experiment, without applying any QC.
         """
+        if self._connections is None:
+            self._load()
         return None if self._connections is None else self._connections[:]
 
     @property
@@ -160,6 +188,8 @@ class Experiment(object):
     def gap_calls(self):
         """Manually curated list of electrical connections seen in this experiment, without applying any QC.
         """
+        if self._gaps is None:
+            self._load()
         return None if self._gaps is None else self._gaps[:]
 
     @property
@@ -181,6 +211,22 @@ class Experiment(object):
                 target_layers.add(cell.target_layer)
             self._target_layers = list(target_layers)
         return self._target_layers
+
+    # @property
+    # def region(self):
+    #     # deprecated
+    #     return 'V1' if (not hasattr(self, '_region') or self._region is None) else self._region
+        
+    @property
+    def target_region(self):
+        if self.lims_record['organism'] == 'mouse':
+            # mouse: look up in acq4 metadata
+            rgn = self.expt_info.get('target_region', None)
+            corrected = {'V1': 'VisP'}.get(rgn, rgn)
+            return corrected
+        else:
+            # human: read from LIMS
+            return self.lims_record['structure']
 
     @property
     def labels(self):
@@ -251,6 +297,12 @@ class Experiment(object):
         return stim
 
     @property
+    def electrodes(self):
+        if self._electrodes is None:
+            self._load()
+        return self._electrodes
+
+    @property
     def cells(self):
         if self._cells is None:
             if self.electrodes is None:
@@ -264,8 +316,7 @@ class Experiment(object):
         Sets several properties: source_id, _site_path, electrodes, _connections, _gaps
         """
         self.source_id = (yml_file, None)
-        self._site_path = os.path.dirname(yml_file)
-        self.electrodes = OrderedDict()
+        self._electrodes = OrderedDict()
         
         pips = PipetteMetadata(os.path.dirname(yml_file))
         self._pipettes_yml = pips
@@ -273,7 +324,7 @@ class Experiment(object):
         genotype = self.genotype
         for pip_id, pip_meta in pips.pipettes.items():
             elec = Electrode(pip_id, start_time=pip_meta['patch_start'], stop_time=pip_meta['patch_stop'], device_id=pip_meta['ad_channel'], patch_status=pip_meta['pipette_status'])
-            self.electrodes[pip_id] = elec
+            self._electrodes[pip_id] = elec
 
             if pip_meta['got_data'] is False and pip_meta['pipette_status'] not in ['Low seal', 'GOhm seal', 'Not recorded']:
                 continue
@@ -324,7 +375,14 @@ class Experiment(object):
             if self.lims_record['organism'] == 'mouse':
                 if genotype is None:
                     raise Exception("Mouse specimen has no genotype: %s\n  (from %r)" % (self.specimen_name, self))
-                for driver,positive in genotype.predict_driver_expression(colors).items():
+
+                if dye is None:
+                    starting_factors = None
+                else:
+                    genotype.model.add_rule([dye], [dye_color])
+                    starting_factors = [dye]
+                
+                for driver,positive in genotype.predict_driver_expression(colors, starting_factors).items():
                     cell.labels[driver] = positive
 
             # load old QC keys
@@ -438,13 +496,13 @@ class Experiment(object):
         except Exception as exc:
             Exception("Error parsing experiment: %s\n%s" % (self, exc.args[0]))
 
-        self.electrodes = OrderedDict()
+        self._electrodes = OrderedDict()
         for i in range(1,9):
             # Ideally, this is the only place we would bake in this assumption:
             ad_channel = i - 1
 
             elec = Electrode(i, None, None, ad_channel)
-            self.electrodes[i] = elec
+            self._electrodes[i] = elec
             elec.cell = Cell(self, i, elec)
     
         have_connections = False
@@ -645,10 +703,6 @@ class Experiment(object):
         return self._summary
 
     @property
-    def region(self):
-        return 'V1' if (not hasattr(self, '_region') or self._region is None) else self._region
-
-    @property
     def connections_probed(self):
         """A list of probed connections (pre_cell, post_cell) that passed QC.
         """
@@ -798,7 +852,7 @@ class Experiment(object):
         return self.slice_info['__timestamp__']
 
     @property
-    def slice_dir(self):
+    def slice_path(self):
         return os.path.join(self.path, '..')
 
     @property
@@ -850,16 +904,7 @@ class Experiment(object):
         Contains all ephys recordings.
         """
         if self._data is None:
-            try:
-                self._data = MultiPatchExperiment(self.nwb_cache_file)
-            except IOError:
-                os.remove(self.nwb_cache_file)
-                self._data = MultiPatchExperiment(self.nwb_cache_file)
-            except Exception as exc:
-                if isinstance(exc.args[0], str) and 'is not inside' in exc.args[0]:
-                    return MultiPatchExperiment(self.nwb_file)
-                else:
-                    raise
+            self._data = MultiPatchExperiment(self.nwb_cache_file)
         return self._data
 
     def close_data(self):
@@ -909,6 +954,18 @@ class Experiment(object):
         return self._lims_record
 
     @property
+    def injections(self):
+        """Return a genotype string for any viral injections or other probes added in this experiment.
+        """
+        info = self.expt_info
+        inj = info.get('injections')
+        if inj in (None, ''):
+            return None
+        if inj not in INJECTIONS:
+            raise KeyError("Injection %r is unknown in constants.INJECTIONS" % inj)
+        return INJECTIONS[inj]        
+
+    @property
     def genotype(self):
         """The genotype of this specimen.
         """
@@ -916,6 +973,11 @@ class Experiment(object):
             gt_name = self.lims_record['genotype']
             if gt_name is None:
                 return None
+                
+            inj = self.injections
+            if inj is not None:
+                gt_name = ';'.join(gt_name.split(';') + [inj])
+                
             self._genotype = Genotype(gt_name)
         return self._genotype
 
